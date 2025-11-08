@@ -1,0 +1,322 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --radius: 0.5rem;
+    --sidebar-background: 0 0% 98%;
+    --sidebar-foreground: 240 5.3% 26.1%;
+    --sidebar-primary: 240 5.9% 10%;
+    --sidebar-primary-foreground: 0 0% 98%;
+    --sidebar-accent: 240 4.8% 95.9%;
+    --sidebar-accent-foreground: 240 5.9% 10%;
+    --sidebar-border: 220 13% 91%;
+    --sidebar-ring: 217.2 91.2% 59.8%
+  }
+
+  .dark {
+    --sidebar-background: 240 5.9% 10%;
+    --sidebar-foreground: 240 4.8% 95.9%;
+    --sidebar-primary: 224.3 76.3% 48%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 240 3.7% 15.9%;
+    --sidebar-accent-foreground: 240 4.8% 95.9%;
+    --sidebar-border: 240 3.7% 15.9%;
+    --sidebar-ring: 217.2 91.2% 59.8%
+  }
+  
+  /* iOS Safe Area Support */
+  body {
+    padding-top: env(safe-area-inset-top);
+    padding-bottom: env(safe-area-inset-bottom);
+    padding-left: env(safe-area-inset-left);
+    padding-right: env(safe-area-inset-right);
+  }
+}
+
+/* Improve touch targets for mobile */
+.touch-manipulation {
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* Safe area for bottom navigation */
+.safe-area-inset-bottom {
+  padding-bottom: calc(env(safe-area-inset-bottom) + 0.5rem);
+}
+
+/* Smooth scrolling for mobile */
+@media (max-width: 768px) {
+  * {
+    -webkit-overflow-scrolling: touch;
+  }
+  
+  /* Prevent zoom on input focus for iOS */
+  input,
+  select,
+  textarea {
+    font-size: 16px !important;
+  }
+}
+
+/* Better table scroll on mobile */
+.overflow-x-auto {
+  scrollbar-width: thin;
+  scrollbar-color: #cbd5e0 transparent;
+}
+
+.overflow-x-auto::-webkit-scrollbar {
+  height: 6px;
+}
+
+.overflow-x-auto::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.overflow-x-auto::-webkit-scrollbar-thumb {
+  background-color: #cbd5e0;
+  border-radius: 3px;
+}
+
+/* iPhone 15/15 Pro/16 Pro Optimizations (393px width) */
+@media (max-width: 393px) {
+  /* Tighter spacing for smaller iPhone */
+  .iphone-compact {
+    padding: 0.75rem !important;
+  }
+  
+  /* Smaller text for better fit */
+  .text-base {
+    font-size: 0.875rem !important;
+  }
+  
+  /* Optimize form inputs */
+  input, select, textarea {
+    padding: 0.625rem 0.75rem !important;
+    font-size: 16px !important;
+  }
+  
+  /* Compact buttons */
+  button {
+    padding: 0.625rem 0.875rem !important;
+    font-size: 0.875rem !important;
+    min-height: 44px;
+  }
+  
+  /* Schedule table adjustments */
+  .schedule-table {
+    min-width: 380px;
+  }
+  
+  .schedule-table td {
+    min-width: 120px !important;
+    padding: 0.5rem !important;
+  }
+  
+  /* Modal adjustments */
+  .modal-mobile {
+    max-height: 85vh !important;
+  }
+  
+  /* Card spacing */
+  .card-compact {
+    padding: 0.875rem !important;
+    margin-bottom: 0.75rem !important;
+  }
+  
+  /* Navigation optimization */
+  .nav-compact {
+    padding: 0.5rem !important;
+  }
+  
+  .nav-compact span {
+    font-size: 0.75rem !important;
+  }
+}
+
+/* iPhone 15 Plus/Pro Max/16 Pro Max Optimizations (430px width) */
+@media (max-width: 430px) and (min-width: 394px) {
+  /* Balanced spacing for larger iPhone */
+  .iphone-plus {
+    padding: 1rem !important;
+  }
+  
+  /* Optimal button sizing */
+  button {
+    min-height: 48px;
+    padding: 0.75rem 1rem !important;
+  }
+  
+  /* Better table layout */
+  .schedule-table {
+    min-width: 420px;
+  }
+  
+  .schedule-table td {
+    min-width: 140px !important;
+    padding: 0.625rem !important;
+  }
+  
+  /* Enhanced forms */
+  input, select, textarea {
+    padding: 0.75rem 1rem !important;
+  }
+  
+  /* Modal optimization */
+  .modal-plus {
+    max-height: 80vh !important;
+  }
+  
+  /* Card layout */
+  .card-plus {
+    padding: 1rem !important;
+    margin-bottom: 0.875rem !important;
+  }
+  
+  /* Grid improvements */
+  .grid-plus {
+    grid-template-columns: repeat(2, 1fr) !important;
+    gap: 1rem !important;
+  }
+}
+
+/* Portrait orientation specific optimizations */
+@media (orientation: portrait) and (max-width: 430px) {
+  /* Maximize vertical space */
+  .portrait-optimize {
+    min-height: calc(100vh - env(safe-area-inset-top) - env(safe-area-inset-bottom));
+  }
+  
+  /* Sticky headers */
+  .sticky-header {
+    position: sticky;
+    top: env(safe-area-inset-top);
+    z-index: 10;
+    background: white;
+    border-bottom: 1px solid #e5e7eb;
+  }
+  
+  /* Footer optimization */
+  .footer-optimize {
+    padding-bottom: calc(env(safe-area-inset-bottom) + 1rem);
+  }
+}
+
+/* Touch-friendly table improvements for iPhone */
+@media (max-width: 430px) {
+  table {
+    table-layout: fixed;
+    width: 100%;
+  }
+  
+  .table-responsive {
+    overflow-x: auto;
+    overflow-y: hidden;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+  }
+  
+  .table-responsive::-webkit-scrollbar {
+    display: none;
+  }
+  
+  /* Cell content ellipsis for long text */
+  .cell-ellipsis {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 100px;
+  }
+  
+  /* Better visual feedback */
+  button:active, .touch-manipulation:active {
+    transform: scale(0.98);
+    transition: transform 0.1s;
+  }
+}
+
+/* Enhanced visual hierarchy for iPhone screens */
+@media (max-width: 430px) {
+  h1 { font-size: 1.5rem !important; }
+  h2 { font-size: 1.25rem !important; }
+  h3 { font-size: 1.125rem !important; }
+  h4 { font-size: 1rem !important; }
+  
+  /* Better contrast for small screens */
+  .text-gray-500 {
+    color: #6b7280 !important;
+  }
+  
+  .text-gray-400 {
+    color: #9ca3af !important;
+  }
+}
+
+/* Animation performance optimization for iPhone */
+@media (max-width: 430px) {
+  * {
+    -webkit-transform: translate3d(0, 0, 0);
+    transform: translate3d(0, 0, 0);
+  }
+  
+  .animate-smooth {
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+}
+
+img {
+  object-position: top;
+}
+
+.fixed {
+  position: fixed;
+}
+
+/* Masquer l'attribution MiniMax Agent */
+/* Cibler par contenu textuel */
+div:has(> *:not(:empty)):not(:has(> div)):not(:has(> main)):not(:has(> header)):not(:has(> nav)):not(:has(> footer)) {
+  /* Ce sélecteur cible les divs simples avec contenu */
+}
+
+/* Masquer tout élément contenant "MiniMax Agent" ou "Created by" */
+*[class*="minimax" i],
+*[class*="agent" i],
+*[id*="minimax" i],
+*[id*="agent" i],
+*[class*="watermark" i],
+*[class*="attribution" i],
+*[class*="credit" i] {
+  display: none !important;
+  visibility: hidden !important;
+  opacity: 0 !important;
+  pointer-events: none !important;
+}
+
+/* Masquer les éléments fixes en bas à droite qui ne font pas partie de l'UI principale */
+body > div:not(#root):not([class]):not([id]),
+body > div[style*="fixed"]:not(#root),
+body > div[style*="absolute"]:not(#root) {
+  display: none !important;
+  visibility: hidden !important;
+  opacity: 0 !important;
+}
+
+/* Cibler spécifiquement les overlays en bas à droite */
+body > *:not(#root) {
+  display: none !important;
+  visibility: hidden !important;
+  opacity: 0 !important;
+}
+
+/* S'assurer que seul le root de l'app est visible */
+body > :not(#root):not(script):not(style):not(link) {
+  display: none !important;
+}
+
+/* Supprimer tout élément externe ajouté après le chargement */
+#root ~ * {
+  display: none !important;
+  visibility: hidden !important;
+  opacity: 0 !important;
+}
