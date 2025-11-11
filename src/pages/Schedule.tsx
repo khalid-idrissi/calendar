@@ -553,10 +553,14 @@ export function Schedule({ restaurant }: Props) {
                   {emp.prenom} {emp.nom}
                 </span>
                 {emp.restaurants.find(r => r.restaurant === restaurant)?.est_principal && (
-                  <Star className="w-3 h-3" title="Restaurant principal" />
+                  <span title="Restaurant principal">
+                    <Star className="w-3 h-3" />
+                  </span>
                 )}
                 {emp.restaurants.length > 1 && (
-                  <MapPin className="w-3 h-3" title="Multi-restaurants" />
+                  <span title="Multi-restaurants">
+                    <MapPin className="w-3 h-3" />
+                  </span>
                 )}
               </div>
             ))}
@@ -648,8 +652,16 @@ export function Schedule({ restaurant }: Props) {
                                       {emp.name} ({emp.hours}h)
                                     </span>
                                     <div className="flex items-center gap-0.5 flex-shrink-0">
-                                      {emp.isPrincipal && <Star className="w-3 h-3" title="Restaurant principal" />}
-                                      {emp.isMultiRestaurant && <MapPin className="w-3 h-3" title="Multi-restaurants" />}
+                                      {emp.isPrincipal && (
+                                        <span title="Restaurant principal">
+                                          <Star className="w-3 h-3" />
+                                        </span>
+                                      )}
+                                      {emp.isMultiRestaurant && (
+                                        <span title="Multi-restaurants">
+                                          <MapPin className="w-3 h-3" />
+                                        </span>
+                                      )}
                                     </div>
                                   </div>
                                   <div className="flex items-center gap-1 flex-shrink-0 ml-1">
@@ -733,8 +745,16 @@ export function Schedule({ restaurant }: Props) {
                                       {emp.name} ({emp.hours}h)
                                     </span>
                                     <div className="flex items-center gap-0.5 flex-shrink-0">
-                                      {emp.isPrincipal && <Star className="w-3 h-3" title="Restaurant principal" />}
-                                      {emp.isMultiRestaurant && <MapPin className="w-3 h-3" title="Multi-restaurants" />}
+                                      {emp.isPrincipal && (
+                                        <span title="Restaurant principal">
+                                          <Star className="w-3 h-3" />
+                                        </span>
+                                      )}
+                                      {emp.isMultiRestaurant && (
+                                        <span title="Multi-restaurants">
+                                          <MapPin className="w-3 h-3" />
+                                        </span>
+                                      )}
                                     </div>
                                   </div>
                                   <div className="flex items-center gap-1 flex-shrink-0 ml-1">
@@ -856,10 +876,14 @@ export function Schedule({ restaurant }: Props) {
                           </span>
                           <div className="flex items-center gap-1">
                             {currentRestaurantData?.est_principal && (
-                              <Star className="w-3 h-3 text-blue-600" title="Restaurant principal" />
+                              <span title="Restaurant principal">
+                                <Star className="w-3 h-3 text-blue-600" />
+                              </span>
                             )}
                             {emp.restaurants.length > 1 && (
-                              <MapPin className="w-3 h-3 text-green-600" title="Multi-restaurants" />
+                              <span title="Multi-restaurants">
+                                <MapPin className="w-3 h-3 text-green-600" />
+                              </span>
                             )}
                           </div>
                         </div>
