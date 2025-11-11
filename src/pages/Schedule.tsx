@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { supabase, type EmployeeWithRestaurants, type Shift } from '../lib/supabase';
-import { ChevronLeft, ChevronRight, X, Star, MapPin, Edit2, Check } from 'lucide-react';
+import { ChevronLeft, ChevronRight, X, Star, MapPin, Edit2, Check, Copy } from 'lucide-react';
 
 type Props = {
   restaurant: 'MTL_NORD' | 'HENRI_BOURASSA';
@@ -33,6 +33,10 @@ export function Schedule({ restaurant }: Props) {
   const [editingShift, setEditingShift] = useState<{ shiftId: string; hours: string } | null>(null);
   const [validationError, setValidationError] = useState<string>('');
   const [deleteConfirmation, setDeleteConfirmation] = useState<{ shiftId: string; employeeName: string } | null>(null);
+  const [showDuplicateModal, setShowDuplicateModal] = useState(false);
+  const [targetWeekStart, setTargetWeekStart] = useState<string>('');
+  const [duplicating, setDuplicating] = useState(false);
+  const [duplicateConflict, setDuplicateConflict] = useState<boolean>(false);
 
 
   // Jours de base (ordre dimanche = 0)
@@ -66,6 +70,12 @@ export function Schedule({ restaurant }: Props) {
   useEffect(() => {
     fetchData();
   }, [restaurant, currentWeekStart]);
+
+  useEffect(() => {
+    if (targetWeekStart) {
+      checkForConflicts();
+    }
+  }, [targetWeekStart]);
 
   const fetchSettings = async () => {
     try {
@@ -336,6 +346,116 @@ export function Schedule({ restaurant }: Props) {
     setEditingShift(null);
   };
 
+  // Fonction pour ouvrir le modal de duplication
+  const handleDuplicateWeek = () => {
+    const nextWeek = new Date(currentWeekStart);
+    nextWeek.setDate(currentWeekStart.getDate() + 7);
+    setTargetWeekStart(formatDate(nextWeek));
+    setShowDuplicateModal(true);
+    setDuplicateConflict(false);
+  };
+
+  // Fonction pour vérifier les conflits
+  const checkForConflicts = async () => {
+    if (!targetWeekStart) return;
+    
+    const targetEndDate = new Date(targetWeekStart);
+    targetEndDate.setDate(targetEndDate.getDate() + 6);
+    
+    const { data: existingShifts } = await supabase
+      .from('shifts')
+      .select('*')
+      .eq('restaurant', restaurant)
+      .gte('date', targetWeekStart)
+      .lte('date', formatDate(targetEndDate));
+
+    setDuplicateConflict((existingShifts?.length || 0) > 0);
+  };
+
+  // Fonction pour dupliquer la semaine
+  const handleConfirmDuplicate = async () => {
+    if (!targetWeekStart) return;
+    
+    setDuplicating(true);
+    try {
+      // Calculer les dates de destination
+      const sourceStart = new Date(currentWeekStart);
+      const targetStart = new Date(targetWeekStart);
+      const targetEndDate = new Date(targetStart);
+      targetEndDate.setDate(targetStart.getDate() + 6);
+
+      // Récupérer tous les shifts de la semaine source
+      const sourceStartDate = formatDate(sourceStart);
+      const sourceEndDate = formatDate(new Date(sourceStart.getTime() + 6 * 24 * 60 * 60 * 1000));
+      
+      const { data: sourceShifts, error: fetchError } = await supabase
+        .from('shifts')
+        .select('*')
+        .eq('restaurant', restaurant)
+        .gte('date', sourceStartDate)
+        .lte('date', sourceEndDate);
+
+      if (fetchError) {
+        console.error('Erreur lors de la récupération des shifts:', fetchError);
+        alert('Erreur lors de la récupération des shifts à dupliquer');
+        return;
+      }
+
+      if (!sourceShifts || sourceShifts.length === 0) {
+        alert('Aucun shift à dupliquer pour cette semaine');
+        setShowDuplicateModal(false);
+        return;
+      }
+
+      // Créer les nouveaux shifts pour la semaine de destination
+      const newShifts = sourceShifts.map(shift => {
+        const sourceDate = new Date(shift.date);
+        const dayOfWeek = sourceDate.getDay(); // 0 = dimanche, 1 = lundi, etc.
+        const targetDate = new Date(targetStart);
+        
+        // Ajuster pour la semaine de destination
+        if (dayOfWeek === 0) targetDate.setDate(targetStart.getDate()); // Dimanche
+        else if (dayOfWeek === 1) targetDate.setDate(targetStart.getDate() + 1); // Lundi
+        else if (dayOfWeek === 2) targetDate.setDate(targetStart.getDate() + 2); // Mardi
+        else if (dayOfWeek === 3) targetDate.setDate(targetStart.getDate() + 3); // Mercredi
+        else if (dayOfWeek === 4) targetDate.setDate(targetStart.getDate() + 4); // Jeudi
+        else if (dayOfWeek === 5) targetDate.setDate(targetStart.getDate() + 5); // Vendredi
+        else if (dayOfWeek === 6) targetDate.setDate(targetStart.getDate() + 6); // Samedi
+
+        return {
+          employee_id: shift.employee_id,
+          date: formatDate(targetDate),
+          shift_type: shift.shift_type,
+          start_time: shift.start_time,
+          end_time: shift.end_time,
+          heures_travaillees: shift.heures_travaillees,
+          restaurant: shift.restaurant,
+        };
+      });
+
+      // Insérer les nouveaux shifts
+      const { error: insertError } = await supabase
+        .from('shifts')
+        .insert(newShifts);
+
+      if (insertError) {
+        console.error('Erreur lors de l\'insertion:', insertError);
+        alert('Erreur lors de la duplication: ' + insertError.message);
+        return;
+      }
+
+      alert(`${sourceShifts.length} shift(s) dupliqué(s) avec succès !`);
+      setShowDuplicateModal(false);
+      await fetchShifts();
+
+    } catch (error) {
+      console.error('Erreur lors de la duplication:', error);
+      alert('Erreur inattendue lors de la duplication');
+    } finally {
+      setDuplicating(false);
+    }
+  };
+
   // Fonction pour obtenir une couleur de texte contrastée
   const getContrastColor = (hexColor: string): string => {
     const hex = hexColor.replace('#', '');
@@ -395,6 +515,13 @@ export function Schedule({ restaurant }: Props) {
           >
             <ChevronRight className="w-4 h-4 sm:w-5 sm:h-5" />
           </button>
+          <button
+            onClick={handleDuplicateWeek}
+            className="p-2 sm:p-2.5 rounded-lg border border-green-300 bg-green-50 hover:bg-green-100 text-green-700 transition-colors touch-manipulation"
+            title="Dupliquer cette semaine vers une autre"
+          >
+            <Copy className="w-4 h-4 sm:w-5 sm:h-5" />
+          </button>
         </div>
       </div>
 
@@ -426,10 +553,10 @@ export function Schedule({ restaurant }: Props) {
                   {emp.prenom} {emp.nom}
                 </span>
                 {emp.restaurants.find(r => r.restaurant === restaurant)?.est_principal && (
-                  <Star className="w-3 h-3"  />
+                  <Star className="w-3 h-3" title="Restaurant principal" />
                 )}
                 {emp.restaurants.length > 1 && (
-                  <MapPin className="w-3 h-3"  />
+                  <MapPin className="w-3 h-3" title="Multi-restaurants" />
                 )}
               </div>
             ))}
@@ -502,14 +629,14 @@ export function Schedule({ restaurant }: Props) {
                                   <button
                                     onClick={handleSaveHours}
                                     className="p-0.5 hover:opacity-80"
-                                    
+                                    title="Sauvegarder"
                                   >
                                     <Check className="w-3 h-3" />
                                   </button>
                                   <button
                                     onClick={handleCancelEdit}
                                     className="p-0.5 hover:opacity-80"
-                                    
+                                    title="Annuler"
                                   >
                                     <X className="w-3 h-3" />
                                   </button>
@@ -521,8 +648,8 @@ export function Schedule({ restaurant }: Props) {
                                       {emp.name} ({emp.hours}h)
                                     </span>
                                     <div className="flex items-center gap-0.5 flex-shrink-0">
-                                      {emp.isPrincipal && <Star className="w-3 h-3"  />}
-                                      {emp.isMultiRestaurant && <MapPin className="w-3 h-3"  />}
+                                      {emp.isPrincipal && <Star className="w-3 h-3" title="Restaurant principal" />}
+                                      {emp.isMultiRestaurant && <MapPin className="w-3 h-3" title="Multi-restaurants" />}
                                     </div>
                                   </div>
                                   <div className="flex items-center gap-1 flex-shrink-0 ml-1">
@@ -532,7 +659,7 @@ export function Schedule({ restaurant }: Props) {
                                         handleEditHours(emp.shiftId, emp.hours);
                                       }}
                                       className="p-0.5 hover:opacity-80"
-                                      
+                                      title="Modifier les heures"
                                     >
                                       <Edit2 className="w-3 h-3 sm:w-3.5 sm:h-3.5" />
                                     </button>
@@ -542,7 +669,7 @@ export function Schedule({ restaurant }: Props) {
                                         handleRemoveShift(emp.shiftId, emp.name);
                                       }}
                                       className="p-0.5 hover:opacity-80"
-                                      
+                                      title="Supprimer"
                                     >
                                       <X className="w-3 h-3 sm:w-4 sm:h-4" />
                                     </button>
@@ -587,14 +714,14 @@ export function Schedule({ restaurant }: Props) {
                                   <button
                                     onClick={handleSaveHours}
                                     className="p-0.5 hover:opacity-80"
-                                    
+                                    title="Sauvegarder"
                                   >
                                     <Check className="w-3 h-3" />
                                   </button>
                                   <button
                                     onClick={handleCancelEdit}
                                     className="p-0.5 hover:opacity-80"
-                                    
+                                    title="Annuler"
                                   >
                                     <X className="w-3 h-3" />
                                   </button>
@@ -606,8 +733,8 @@ export function Schedule({ restaurant }: Props) {
                                       {emp.name} ({emp.hours}h)
                                     </span>
                                     <div className="flex items-center gap-0.5 flex-shrink-0">
-                                      {emp.isPrincipal && <Star className="w-3 h-3"  />}
-                                      {emp.isMultiRestaurant && <MapPin className="w-3 h-3"  />}
+                                      {emp.isPrincipal && <Star className="w-3 h-3" title="Restaurant principal" />}
+                                      {emp.isMultiRestaurant && <MapPin className="w-3 h-3" title="Multi-restaurants" />}
                                     </div>
                                   </div>
                                   <div className="flex items-center gap-1 flex-shrink-0 ml-1">
@@ -617,7 +744,7 @@ export function Schedule({ restaurant }: Props) {
                                         handleEditHours(emp.shiftId, emp.hours);
                                       }}
                                       className="p-0.5 hover:opacity-80"
-                                      
+                                      title="Modifier les heures"
                                     >
                                       <Edit2 className="w-3 h-3 sm:w-3.5 sm:h-3.5" />
                                     </button>
@@ -627,7 +754,7 @@ export function Schedule({ restaurant }: Props) {
                                         handleRemoveShift(emp.shiftId, emp.name);
                                       }}
                                       className="p-0.5 hover:opacity-80"
-                                      
+                                      title="Supprimer"
                                     >
                                       <X className="w-3 h-3 sm:w-4 sm:h-4" />
                                     </button>
@@ -729,10 +856,10 @@ export function Schedule({ restaurant }: Props) {
                           </span>
                           <div className="flex items-center gap-1">
                             {currentRestaurantData?.est_principal && (
-                              <Star className="w-3 h-3 text-blue-600"  />
+                              <Star className="w-3 h-3 text-blue-600" title="Restaurant principal" />
                             )}
                             {emp.restaurants.length > 1 && (
-                              <MapPin className="w-3 h-3 text-green-600"  />
+                              <MapPin className="w-3 h-3 text-green-600" title="Multi-restaurants" />
                             )}
                           </div>
                         </div>
@@ -780,6 +907,67 @@ export function Schedule({ restaurant }: Props) {
                 className="px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700 transition-colors"
               >
                 Oui
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal de duplication de semaine */}
+      {showDuplicateModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4 shadow-xl">
+            <h3 className="text-lg font-semibold mb-4 text-gray-900">
+              Dupliquer l'emploi du temps
+            </h3>
+            
+            <div className="mb-4">
+              <p className="text-sm text-gray-600 mb-3">
+                Cette action duplique tous les shifts de la semaine actuelle vers une autre semaine.
+              </p>
+              
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Semaine de destination (date du lundi)
+              </label>
+              <input
+                type="date"
+                value={targetWeekStart}
+                onChange={(e) => setTargetWeekStart(e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              />
+            </div>
+
+            {duplicateConflict && (
+              <div className="mb-4 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
+                <p className="text-sm text-yellow-800">
+                  ⚠️ Des shifts existent déjà pour cette semaine. 
+                  Les nouveaux shifts seront ajoutés aux existants.
+                </p>
+              </div>
+            )}
+
+            {duplicating && (
+              <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                <p className="text-sm text-blue-800">
+                  Duplication en cours...
+                </p>
+              </div>
+            )}
+
+            <div className="flex justify-end gap-3">
+              <button
+                onClick={() => setShowDuplicateModal(false)}
+                disabled={duplicating}
+                className="px-4 py-2 bg-gray-200 text-gray-800 rounded hover:bg-gray-300 transition-colors disabled:opacity-50"
+              >
+                Annuler
+              </button>
+              <button
+                onClick={handleConfirmDuplicate}
+                disabled={duplicating || !targetWeekStart}
+                className="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700 transition-colors disabled:opacity-50"
+              >
+                {duplicating ? 'Duplication...' : 'Dupliquer'}
               </button>
             </div>
           </div>
