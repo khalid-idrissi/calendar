@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { supabase, type EmployeeWithRestaurants, type Shift } from '../lib/supabase';
-import { ChevronLeft, ChevronRight, X, Star, MapPin, Edit2, Check, Copy } from 'lucide-react';
+import { ChevronLeft, ChevronRight, X, Star, MapPin, Edit2, Check, Copy, Trash2 } from 'lucide-react';
 
 type Props = {
   restaurant: 'MTL_NORD' | 'HENRI_BOURASSA';
@@ -37,6 +37,8 @@ export function Schedule({ restaurant }: Props) {
   const [targetWeekStart, setTargetWeekStart] = useState<string>('');
   const [duplicating, setDuplicating] = useState(false);
   const [duplicateConflict, setDuplicateConflict] = useState<boolean>(false);
+  const [showDeleteWeekModal, setShowDeleteWeekModal] = useState(false);
+  const [deletingWeek, setDeletingWeek] = useState(false);
 
 
   // Jours de base (ordre dimanche = 0)
@@ -372,7 +374,7 @@ export function Schedule({ restaurant }: Props) {
     setDuplicateConflict((existingShifts?.length || 0) > 0);
   };
 
-  // Fonction pour dupliquer la semaine
+  // Fonction pour dupliquer la semaine (duplication à 100% avec suppression préalable)
   const handleConfirmDuplicate = async () => {
     if (!targetWeekStart) return;
     
@@ -407,7 +409,24 @@ export function Schedule({ restaurant }: Props) {
         return;
       }
 
-      // Créer les nouveaux shifts pour la semaine de destination
+      // ÉTAPE 1: Supprimer tous les shifts existants de la semaine de destination
+      const targetStartDate = formatDate(targetStart);
+      const targetEndDateStr = formatDate(targetEndDate);
+
+      const { error: deleteError } = await supabase
+        .from('shifts')
+        .delete()
+        .eq('restaurant', restaurant)
+        .gte('date', targetStartDate)
+        .lte('date', targetEndDateStr);
+
+      if (deleteError) {
+        console.error('Erreur lors de la suppression:', deleteError);
+        alert('Erreur lors de la suppression des shifts existants');
+        return;
+      }
+
+      // ÉTAPE 2: Créer les nouveaux shifts pour la semaine de destination
       const newShifts = sourceShifts.map(shift => {
         const sourceDate = new Date(shift.date);
         const dayOfWeek = sourceDate.getDay(); // 0 = dimanche, 1 = lundi, etc.
@@ -433,7 +452,7 @@ export function Schedule({ restaurant }: Props) {
         };
       });
 
-      // Insérer les nouveaux shifts
+      // ÉTAPE 3: Insérer les nouveaux shifts
       const { error: insertError } = await supabase
         .from('shifts')
         .insert(newShifts);
@@ -444,7 +463,7 @@ export function Schedule({ restaurant }: Props) {
         return;
       }
 
-      alert(`${sourceShifts.length} shift(s) dupliqué(s) avec succès !`);
+      alert(`${sourceShifts.length} shift(s) dupliqué(s) à 100% avec succès ! (La semaine de destination a été complètement remplacée)`);
       setShowDuplicateModal(false);
       await fetchShifts();
 
@@ -453,6 +472,50 @@ export function Schedule({ restaurant }: Props) {
       alert('Erreur inattendue lors de la duplication');
     } finally {
       setDuplicating(false);
+    }
+  };
+
+  // Fonction pour ouvrir le modal de suppression de semaine
+  const handleDeleteWeek = () => {
+    setShowDeleteWeekModal(true);
+  };
+
+  // Fonction pour confirmer la suppression de la semaine
+  const handleConfirmDeleteWeek = async () => {
+    setDeletingWeek(true);
+    try {
+      // Calculer les dates de la semaine
+      const weekStart = currentWeekStart;
+      const weekEnd = new Date(currentWeekStart);
+      weekEnd.setDate(currentWeekStart.getDate() + 6);
+      
+      const startDate = formatDate(weekStart);
+      const endDate = formatDate(weekEnd);
+
+      // Supprimer tous les shifts de cette semaine
+      const { error } = await supabase
+        .from('shifts')
+        .delete()
+        .eq('restaurant', restaurant)
+        .gte('date', startDate)
+        .lte('date', endDate);
+
+      if (error) {
+        console.error('Erreur lors de la suppression:', error);
+        alert('Erreur lors de la suppression des shifts: ' + error.message);
+        return;
+      }
+
+      const deletedCount = shifts.filter(s => s.date >= startDate && s.date <= endDate).length;
+      alert(`${deletedCount} shift(s) supprimé(s) avec succès !`);
+      setShowDeleteWeekModal(false);
+      await fetchShifts();
+
+    } catch (error) {
+      console.error('Erreur lors de la suppression:', error);
+      alert('Erreur inattendue lors de la suppression');
+    } finally {
+      setDeletingWeek(false);
     }
   };
 
@@ -521,6 +584,13 @@ export function Schedule({ restaurant }: Props) {
             title="Dupliquer cette semaine vers une autre"
           >
             <Copy className="w-4 h-4 sm:w-5 sm:h-5" />
+          </button>
+          <button
+            onClick={handleDeleteWeek}
+            className="p-2 sm:p-2.5 rounded-lg border border-red-300 bg-red-50 hover:bg-red-100 text-red-700 transition-colors touch-manipulation"
+            title="Supprimer tous les shifts de cette semaine"
+          >
+            <Trash2 className="w-4 h-4 sm:w-5 sm:h-5" />
           </button>
         </div>
       </div>
@@ -961,14 +1031,12 @@ export function Schedule({ restaurant }: Props) {
               />
             </div>
 
-            {duplicateConflict && (
-              <div className="mb-4 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
-                <p className="text-sm text-yellow-800">
-                  ⚠️ Des shifts existent déjà pour cette semaine. 
-                  Les nouveaux shifts seront ajoutés aux existants.
-                </p>
-              </div>
-            )}
+            <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+              <p className="text-sm text-blue-800">
+                🔄 Duplication à 100% : Cette action supprimera d'abord tous les shifts existants 
+                de la semaine de destination, puis copiera la semaine actuelle à l'identique.
+              </p>
+            </div>
 
             {duplicating && (
               <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
@@ -991,7 +1059,62 @@ export function Schedule({ restaurant }: Props) {
                 disabled={duplicating || !targetWeekStart}
                 className="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700 transition-colors disabled:opacity-50"
               >
-                {duplicating ? 'Duplication...' : 'Dupliquer'}
+                {duplicating ? 'Duplication...' : 'Dupliquer à 100%'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal de confirmation de suppression de semaine */}
+      {showDeleteWeekModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4 shadow-xl">
+            <h3 className="text-lg font-semibold mb-4 text-gray-900">
+              Supprimer la semaine
+            </h3>
+            
+            <div className="mb-4">
+              <p className="text-sm text-gray-600 mb-3">
+                Cette action supprime définitivement tous les shifts de la semaine en cours.
+              </p>
+              
+              <div className="bg-red-50 border border-red-200 rounded-lg p-3">
+                <p className="text-sm text-red-800">
+                  ⚠️ Attention : Cette action est irréversible !
+                </p>
+                <p className="text-sm text-red-700 mt-1">
+                  {getWeekRangeText()} - {shifts.filter(s => {
+                    const shiftDate = new Date(s.date);
+                    return shiftDate >= currentWeekStart && 
+                           shiftDate <= new Date(currentWeekStart.getTime() + 6 * 24 * 60 * 60 * 1000);
+                  }).length} shift(s) seront supprimé(s).
+                </p>
+              </div>
+            </div>
+
+            {deletingWeek && (
+              <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                <p className="text-sm text-blue-800">
+                  Suppression en cours...
+                </p>
+              </div>
+            )}
+
+            <div className="flex justify-end gap-3">
+              <button
+                onClick={() => setShowDeleteWeekModal(false)}
+                disabled={deletingWeek}
+                className="px-4 py-2 bg-gray-200 text-gray-800 rounded hover:bg-gray-300 transition-colors disabled:opacity-50"
+              >
+                Annuler
+              </button>
+              <button
+                onClick={handleConfirmDeleteWeek}
+                disabled={deletingWeek}
+                className="px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700 transition-colors disabled:opacity-50"
+              >
+                {deletingWeek ? 'Suppression...' : 'Supprimer'}
               </button>
             </div>
           </div>
