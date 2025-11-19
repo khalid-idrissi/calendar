@@ -39,6 +39,7 @@ export function Schedule({ restaurant }: Props) {
   const [duplicateConflict, setDuplicateConflict] = useState<boolean>(false);
   const [showDeleteWeekModal, setShowDeleteWeekModal] = useState(false);
   const [deletingWeek, setDeletingWeek] = useState(false);
+  const [lastDuplicateTime, setLastDuplicateTime] = useState<number>(0);
 
 
   // Jours de base (ordre dimanche = 0)
@@ -118,6 +119,46 @@ export function Schedule({ restaurant }: Props) {
     return result;
   }
 
+  // Fonction pour ajuster une date au jour de début de semaine configuré
+  function adjustToWeekStart(date: Date, startDay: WeekStartDay = 'sunday'): Date {
+    const d = new Date(date);
+    const day = d.getDay(); // 0 = dimanche, 1 = lundi, ..., 6 = samedi
+    
+    let targetDay = 0; // dimanche par défaut
+    if (startDay === 'monday') targetDay = 1;
+    else if (startDay === 'saturday') targetDay = 6;
+    
+    // Calculer la différence de jours pour aller au jour de début
+    let diff = day - targetDay;
+    if (diff < 0) diff += 7;
+    
+    const result = new Date(d);
+    result.setDate(d.getDate() - diff);
+    result.setHours(0, 0, 0, 0);
+    result.setMinutes(0);
+    result.setSeconds(0);
+    result.setMilliseconds(0);
+    
+    console.log('🛠️ adjustToWeekStart:', {
+      inputDate: formatDate(d),
+      inputDay: day,
+      targetDay,
+      diff,
+      result: formatDate(result),
+      startDay
+    });
+    
+    return result;
+  }
+
+  // Fonction pour calculer la prochaine semaine selon la configuration (gardée pour compatibilité)
+  const getNextWeekDate = (): string => {
+    const nextWeek = new Date(currentWeekStart);
+    nextWeek.setDate(currentWeekStart.getDate() + 7);
+    const adjustedNextWeek = adjustToWeekStart(nextWeek, weekStartDay);
+    return formatDate(adjustedNextWeek);
+  };
+
   // Fonction combinée pour récupérer les données
   const fetchData = async () => {
     setLoading(true);
@@ -191,7 +232,19 @@ export function Schedule({ restaurant }: Props) {
   };
 
   const formatDate = (date: Date): string => {
-    return date.toISOString().split('T')[0];
+    // Utiliser une approche compatible timezone pour éviter les décalages
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  };
+
+  // Fonction pour parser une date string en heure locale (évite les problèmes de timezone)
+  const parseLocalDate = (dateString: string): Date => {
+    const [year, month, day] = dateString.split('-').map(Number);
+    const date = new Date(year, month - 1, day);
+    date.setHours(0, 0, 0, 0);
+    return date;
   };
 
   const getWeekDates = (): Date[] => {
@@ -350,9 +403,12 @@ export function Schedule({ restaurant }: Props) {
 
   // Fonction pour ouvrir le modal de duplication
   const handleDuplicateWeek = () => {
-    const nextWeek = new Date(currentWeekStart);
-    nextWeek.setDate(currentWeekStart.getDate() + 7);
-    setTargetWeekStart(formatDate(nextWeek));
+    // Utiliser la semaine actuelle alignée selon week_start_day
+    const adjustedCurrentWeek = adjustToWeekStart(currentWeekStart, weekStartDay);
+    const nextWeek = new Date(adjustedCurrentWeek);
+    nextWeek.setDate(adjustedCurrentWeek.getDate() + 7);
+    const adjustedNextWeek = adjustToWeekStart(nextWeek, weekStartDay);
+    setTargetWeekStart(formatDate(adjustedNextWeek));
     setShowDuplicateModal(true);
     setDuplicateConflict(false);
   };
@@ -361,7 +417,8 @@ export function Schedule({ restaurant }: Props) {
   const checkForConflicts = async () => {
     if (!targetWeekStart) return;
     
-    const targetEndDate = new Date(targetWeekStart);
+    // CORRECTION: Parser en heure locale
+    const targetEndDate = parseLocalDate(targetWeekStart);
     targetEndDate.setDate(targetEndDate.getDate() + 6);
     
     const { data: existingShifts } = await supabase
@@ -378,28 +435,131 @@ export function Schedule({ restaurant }: Props) {
   const handleConfirmDuplicate = async () => {
     if (!targetWeekStart) return;
     
+    // Protection contre les duplications concurrentes
+    const now = Date.now();
+    if (now - lastDuplicateTime < 2000) { // 2 secondes minimum entre duplications
+      alert('⚠️ Veuillez attendre quelques secondes avant de relancer une duplication.');
+      return;
+    }
+    
     setDuplicating(true);
+    setLastDuplicateTime(now);
     try {
-      // Calculer les dates de destination
-      const sourceStart = new Date(currentWeekStart);
-      const targetStart = new Date(targetWeekStart);
+      console.log('🚀 Début de la duplication:', { 
+        restaurant, 
+        sourceWeek: formatDate(currentWeekStart), 
+        targetWeek: targetWeekStart 
+      });
+
+      // CORRECTION CRITIQUE: Toujours ajuster sourceStart au week_start_day configuré pour la comparaison
+      let sourceStart = adjustToWeekStart(currentWeekStart, weekStartDay);
+      
+      // CRUCIAL: Valider que targetWeekStart est valide avant l'utilisation
+      if (!targetWeekStart || targetWeekStart.trim() === '') {
+        alert('⚠️ Erreur: Aucune semaine de destination sélectionnée');
+        return;
+      }
+      
+      // CORRECTION CRITIQUE: Parser la date en heure locale pour éviter les décalages de timezone
+      const targetDate = parseLocalDate(targetWeekStart);
+      if (isNaN(targetDate.getTime())) {
+        alert('⚠️ Erreur: Format de date invalide pour la semaine de destination');
+        return;
+      }
+      
+      let targetStart = adjustToWeekStart(targetDate, weekStartDay);
+      
+      // Debugging étendu pour diagnostiquer la désynchronisation
+      console.log('🔍 Debug des dates avant comparaison:', {
+        // Dates originales
+        currentWeekStart_Original: formatDate(new Date(currentWeekStart)),
+        targetWeekStart_Original: targetWeekStart,
+        targetDateParsed: targetDate.toISOString().split('T')[0],
+        targetDate_LocalParse: targetDate.getFullYear() + '-' + String(targetDate.getMonth() + 1).padStart(2, '0') + '-' + String(targetDate.getDate()).padStart(2, '0'),
+        
+        // Dates ajustées
+        sourceStart_Adjusted: formatDate(sourceStart),
+        targetStart_Adjusted: formatDate(targetStart),
+        
+        // Comparaisons
+        sourceTime: sourceStart.getTime(),
+        targetTime: targetStart.getTime(),
+        areEqual: sourceStart.getTime() === targetStart.getTime(),
+        
+        // Configuration
+        weekStartDay,
+        weekStartDayName: weekStartDay === 'monday' ? 'lundi' : weekStartDay === 'sunday' ? 'dimanche' : 'samedi',
+        
+        // Détails pour diagnostiquer le problème
+        timeDifference: Math.abs(sourceStart.getTime() - targetStart.getTime()),
+        dayDifference: Math.abs((sourceStart.getTime() - targetStart.getTime()) / (24 * 60 * 60 * 1000)),
+        
+        // Analyse détaillée de targetStart
+        targetStart_Details: {
+          year: targetStart.getFullYear(),
+          month: targetStart.getMonth() + 1,
+          day: targetStart.getDate(),
+          dayOfWeek: targetStart.getDay(),
+          formatted: formatDate(targetStart)
+        },
+        
+        sourceStart_Details: {
+          year: sourceStart.getFullYear(),
+          month: sourceStart.getMonth() + 1,
+          day: sourceStart.getDate(),
+          dayOfWeek: sourceStart.getDay(),
+          formatted: formatDate(sourceStart)
+        }
+      });
+      
       const targetEndDate = new Date(targetStart);
       targetEndDate.setDate(targetStart.getDate() + 6);
 
-      // Récupérer tous les shifts de la semaine source
+      // Vérifier la cohérence des données avant duplication (comparaison CORRIGÉE)
+      if (sourceStart.getTime() === targetStart.getTime()) {
+        // Message d'erreur détaillé avec toutes les informations de débogage
+        const errorMessage = `Erreur: Impossible de dupliquer vers la même semaine\n\n` +
+          `Source: ${formatDate(sourceStart)} → ${formatDate(new Date(sourceStart.getTime() + 6 * 24 * 60 * 60 * 1000))}\n` +
+          `Destination: ${formatDate(targetStart)} → ${formatDate(targetEndDate)}\n\n` +
+          `🔍 Debug:\n` +
+          `- sourceStart original: ${formatDate(new Date(currentWeekStart))}\n` +
+          `- sourceStart ajusté: ${formatDate(sourceStart)}\n` +
+          `- targetWeekStart input: ${targetWeekStart}\n` +
+          `- targetStart ajusté: ${formatDate(targetStart)}\n` +
+          `- weekStartDay configuré: ${weekStartDay}`;
+        
+        alert(errorMessage);
+        console.error('❌ Erreur de duplication:', {
+          sourceStart: sourceStart,
+          targetStart: targetStart,
+          areEqual: sourceStart.getTime() === targetStart.getTime(),
+          weekStartDay
+        });
+        return;
+      }
+
+      console.log('✅ Validation de duplication:', {
+        source: `${formatDate(sourceStart)} - ${formatDate(new Date(sourceStart.getTime() + 6 * 24 * 60 * 60 * 1000))}`,
+        target: `${formatDate(targetStart)} - ${formatDate(targetEndDate)}`,
+        weekStartDay
+      });
+
+      // Récupérer tous les shifts de la semaine source en utilisant les dates réelles affichées
+      const sourceEndDate = new Date(sourceStart);
+      sourceEndDate.setDate(sourceStart.getDate() + 6);
       const sourceStartDate = formatDate(sourceStart);
-      const sourceEndDate = formatDate(new Date(sourceStart.getTime() + 6 * 24 * 60 * 60 * 1000));
+      const sourceEndDateStr = formatDate(sourceEndDate);
       
       const { data: sourceShifts, error: fetchError } = await supabase
         .from('shifts')
         .select('*')
         .eq('restaurant', restaurant)
         .gte('date', sourceStartDate)
-        .lte('date', sourceEndDate);
+        .lte('date', sourceEndDateStr);
 
       if (fetchError) {
-        console.error('Erreur lors de la récupération des shifts:', fetchError);
-        alert('Erreur lors de la récupération des shifts à dupliquer');
+        console.error('❌ Erreur lors de la récupération des shifts:', fetchError);
+        alert('Erreur lors de la récupération des shifts à dupliquer: ' + fetchError.message);
         return;
       }
 
@@ -409,9 +569,17 @@ export function Schedule({ restaurant }: Props) {
         return;
       }
 
+      console.log(`📋 ${sourceShifts.length} shifts trouvés à dupliquer`);
+
       // ÉTAPE 1: Supprimer tous les shifts existants de la semaine de destination
       const targetStartDate = formatDate(targetStart);
       const targetEndDateStr = formatDate(targetEndDate);
+
+      console.log('🗑️ Suppression des shifts existants:', { 
+        targetStartDate, 
+        targetEndDateStr, 
+        restaurant 
+      });
 
       const { error: deleteError } = await supabase
         .from('shifts')
@@ -421,27 +589,51 @@ export function Schedule({ restaurant }: Props) {
         .lte('date', targetEndDateStr);
 
       if (deleteError) {
-        console.error('Erreur lors de la suppression:', deleteError);
-        alert('Erreur lors de la suppression des shifts existants');
+        console.error('❌ Erreur lors de la suppression:', deleteError);
+        alert('Erreur lors de la suppression des shifts existants: ' + deleteError.message);
         return;
       }
 
       // ÉTAPE 2: Créer les nouveaux shifts pour la semaine de destination
-      const newShifts = sourceShifts.map(shift => {
-        const sourceDate = new Date(shift.date);
-        const dayOfWeek = sourceDate.getDay(); // 0 = dimanche, 1 = lundi, etc.
-        const targetDate = new Date(targetStart);
-        
-        // Ajuster pour la semaine de destination
-        if (dayOfWeek === 0) targetDate.setDate(targetStart.getDate()); // Dimanche
-        else if (dayOfWeek === 1) targetDate.setDate(targetStart.getDate() + 1); // Lundi
-        else if (dayOfWeek === 2) targetDate.setDate(targetStart.getDate() + 2); // Mardi
-        else if (dayOfWeek === 3) targetDate.setDate(targetStart.getDate() + 3); // Mercredi
-        else if (dayOfWeek === 4) targetDate.setDate(targetStart.getDate() + 4); // Jeudi
-        else if (dayOfWeek === 5) targetDate.setDate(targetStart.getDate() + 5); // Vendredi
-        else if (dayOfWeek === 6) targetDate.setDate(targetStart.getDate() + 6); // Samedi
+      // CORRECTION: Utiliser week_start_day au lieu de getDay() pour plus de robustesse
+      console.log('📅 Calcul des dates de destination:', { 
+        weekStartDay,
+        sourceWeekStart: formatDate(sourceStart),
+        targetWeekStart: formatDate(targetStart)
+      });
 
-        return {
+      // Fonction pour obtenir l'index du jour dans la semaine selon week_start_day
+      const getDayIndexInWeek = (date: Date, startDay: WeekStartDay): number => {
+        const dayOfWeek = date.getDay(); // 0 = dimanche, 1 = lundi, ..., 6 = samedi
+        let startIndex = 0;
+        if (startDay === 'monday') startIndex = 1;
+        else if (startDay === 'saturday') startIndex = 6;
+        
+        let index = dayOfWeek - startIndex;
+        if (index < 0) index += 7;
+        return index;
+      };
+      
+      const newShifts = sourceShifts.map(shift => {
+        // CORRECTION: Parser en heure locale pour éviter les décalages
+        const sourceDate = parseLocalDate(shift.date);
+        
+        // Utiliser le week_start_day pour un calcul plus robuste
+        const sourceDayIndex = getDayIndexInWeek(sourceDate, weekStartDay);
+        const targetDate = new Date(targetStart);
+        targetDate.setDate(targetStart.getDate() + sourceDayIndex);
+
+        // Validation: s'assurer que la date calculée est cohérente
+        if (targetDate < targetStart || targetDate > targetEndDate) {
+          console.warn('⚠️ Date calculée hors de la semaine:', {
+            sourceDate: formatDate(sourceDate),
+            targetDate: formatDate(targetDate),
+            weekStart: formatDate(targetStart),
+            weekEnd: formatDate(targetEndDate)
+          });
+        }
+
+        const newShift = {
           employee_id: shift.employee_id,
           date: formatDate(targetDate),
           shift_type: shift.shift_type,
@@ -450,26 +642,64 @@ export function Schedule({ restaurant }: Props) {
           heures_travaillees: shift.heures_travaillees,
           restaurant: shift.restaurant,
         };
+
+        console.log(`📝 Mapping: ${shift.date} (jour ${sourceDayIndex}) → ${newShift.date} → ${weekDays[sourceDayIndex]}`);
+        
+        return newShift;
       });
 
-      // ÉTAPE 3: Insérer les nouveaux shifts
+      // Validation finale: vérifier que tous les shifts sont dans la semaine de destination
+      const invalidShifts = newShifts.filter(shift => {
+        // CORRECTION: Parser en heure locale pour validation correcte
+        const shiftDate = parseLocalDate(shift.date);
+        return shiftDate < targetStart || shiftDate > targetEndDate;
+      });
+
+      if (invalidShifts.length > 0) {
+        console.error('❌ Des shifts sont hors de la semaine de destination:', invalidShifts);
+        alert(`Erreur: ${invalidShifts.length} shifts seraient placés hors de la semaine de destination. Duplication annulée.`);
+        return;
+      }
+
+      console.log('✅ Validation réussie: tous les shifts sont dans la semaine de destination');
+
+      // ÉTAPE 3: Insérer les nouveaux shifts avec gestion d'erreurs robuste
+      console.log(`💾 Insertion de ${newShifts.length} nouveaux shifts...`);
+
       const { error: insertError } = await supabase
         .from('shifts')
         .insert(newShifts);
 
       if (insertError) {
-        console.error('Erreur lors de l\'insertion:', insertError);
+        console.error('❌ Erreur lors de l\'insertion:', insertError);
         alert('Erreur lors de la duplication: ' + insertError.message);
         return;
       }
 
-      alert(`${sourceShifts.length} shift(s) dupliqué(s) à 100% avec succès ! (La semaine de destination a été complètement remplacée)`);
+      console.log('✅ Duplication réussie!');
+      
+      // Message de succès avec détails
+      const successMessage = `✅ Duplication terminée avec succès !\n\n` +
+        `📊 ${sourceShifts.length} shifts dupliqués\n` +
+        `📅 De: ${sourceStartDate} vers ${targetStartDate}\n` +
+        `🏪 Restaurant: ${restaurant}\n\n` +
+        `💡 La semaine de destination a été complètement remplacée.`;
+
+      alert(successMessage);
+      
       setShowDuplicateModal(false);
+      
+      // Forcer le rafraîchissement des données
+      console.log('🔄 Rafraîchissement des données...');
       await fetchShifts();
+      
+      // Forcer la navigation vers la semaine de destination pour voir le résultat
+      setCurrentWeekStart(targetStart);
+      console.log('🎯 Navigation vers la semaine de destination');
 
     } catch (error) {
-      console.error('Erreur lors de la duplication:', error);
-      alert('Erreur inattendue lors de la duplication');
+      console.error('💥 Erreur inattendue lors de la duplication:', error);
+      alert('Erreur inattendue lors de la duplication: ' + (error as Error).message);
     } finally {
       setDuplicating(false);
     }
@@ -1021,14 +1251,47 @@ export function Schedule({ restaurant }: Props) {
               </p>
               
               <label className="block text-sm font-medium text-gray-700 mb-2">
-                Semaine de destination (date du lundi)
+                Semaine de destination (date du {weekStartDay === 'monday' ? 'lundi' : weekStartDay === 'sunday' ? 'dimanche' : 'samedi'})
               </label>
               <input
                 type="date"
                 value={targetWeekStart}
-                onChange={(e) => setTargetWeekStart(e.target.value)}
+                onChange={(e) => {
+                  // CORRECTION: Parser en heure locale pour éviter les décalages
+                  const newDate = parseLocalDate(e.target.value);
+                  console.log('📝 Changement de date utilisateur:', {
+                    inputValue: e.target.value,
+                    newDate: formatDate(newDate),
+                    weekStartDay
+                  });
+                  
+                  // Ajuster automatiquement la date pour qu'elle corresponde au jour de début configuré
+                  const adjustedDate = adjustToWeekStart(newDate, weekStartDay);
+                  const adjustedDateStr = formatDate(adjustedDate);
+                  
+                  console.log('📝 Date ajustée:', {
+                    adjustedDate: adjustedDateStr,
+                    original: newDate.toISOString().split('T')[0]
+                  });
+                  
+                  setTargetWeekStart(adjustedDateStr);
+                }}
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               />
+              
+              {/* Affichage de debug pour diagnostiquer la désynchronisation */}
+              <div className="mt-1 p-2 bg-gray-100 border border-gray-200 rounded text-xs">
+                <strong>🔍 Debug valeur:</strong> targetWeekStart = "{targetWeekStart}" | 
+                currentWeekStart = "{formatDate(new Date(currentWeekStart))}" | 
+                weekStartDay = {weekStartDay}
+              </div>
+              
+              <div className="mt-2 p-2 bg-yellow-50 border border-yellow-200 rounded-lg">
+                <p className="text-xs text-yellow-800">
+                  📍 Configuration: Semaine débutant le {weekStartDay === 'monday' ? 'lundi' : weekStartDay === 'sunday' ? 'dimanche' : 'samedi'} <br/>
+                  💡 La date sera automatiquement ajustée si nécessaire
+                </p>
+              </div>
             </div>
 
             <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
@@ -1085,7 +1348,8 @@ export function Schedule({ restaurant }: Props) {
                 </p>
                 <p className="text-sm text-red-700 mt-1">
                   {getWeekRangeText()} - {shifts.filter(s => {
-                    const shiftDate = new Date(s.date);
+                    // CORRECTION: Parser en heure locale
+                    const shiftDate = parseLocalDate(s.date);
                     return shiftDate >= currentWeekStart && 
                            shiftDate <= new Date(currentWeekStart.getTime() + 6 * 24 * 60 * 60 * 1000);
                   }).length} shift(s) seront supprimé(s).

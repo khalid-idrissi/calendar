@@ -15,6 +15,9 @@ function App() {
   const [restaurant, setRestaurant] = useState<Restaurant>('MTL_NORD');
   const [activeTab, setActiveTab] = useState<TabType>('employees');
   const [currentDate, setCurrentDate] = useState('');
+  // Mode test pour contourner l'authentification (DÉSACTIVÉ EN PRODUCTION)
+  // ⚠️ Ne jamais mettre à 'true' en production - uniquement pour le développement local
+  const [testMode, setTestMode] = useState(false);
 
   // Mettre à jour la date en français
   useEffect(() => {
@@ -39,6 +42,8 @@ function App() {
 
   // Extraire le nom d'affichage de l'utilisateur
   const getUserDisplayName = () => {
+    if (testMode) return 'Admin Test';
+    
     if (!user) return '';
     
     // Essayer d'abord les métadonnées
@@ -72,8 +77,8 @@ function App() {
     );
   }
 
-  // Afficher la page de connexion si non authentifié
-  if (!user) {
+  // Afficher la page de connexion si non authentifié et pas en mode test
+  if (!user && !testMode) {
     return <Login />;
   }
 
@@ -112,11 +117,18 @@ function App() {
               
               {/* Nom utilisateur */}
               <div className="flex flex-col items-end">
-                <span className="text-xs sm:text-sm font-medium text-gray-900">
-                  {getUserDisplayName()}
-                </span>
+                <div className="flex items-center gap-2">
+                  <span className="text-xs sm:text-sm font-medium text-gray-900">
+                    {getUserDisplayName()}
+                  </span>
+                  {testMode && (
+                    <span className="px-2 py-0.5 bg-yellow-100 text-yellow-800 text-xs font-medium rounded-full">
+                      MODE TEST
+                    </span>
+                  )}
+                </div>
                 <span className="text-xs text-gray-500 hidden sm:block">
-                  {user?.email}
+                  {user?.email || 'test@monteiro.com'}
                 </span>
               </div>
               

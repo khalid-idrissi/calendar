@@ -1,7 +1,7 @@
 {
   "name": "monteiro-gestion-heures",
   "private": true,
-  "version": "3.2.9",
+  "version": "3.4.0",
   "description": "Application web de gestion d'heures pour les restaurants Monteiro - Gestion des employés, planification d'horaires et rapports de paie",
   "type": "module",
   "scripts": {

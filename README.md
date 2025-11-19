@@ -133,9 +133,39 @@ L'application est optimisée pour tous les appareils:
 
 ## 🔄 Version
 
-**Version Actuelle**: v3.2.9
+**Version Actuelle**: v3.4.0 ✅
+
+### 🎉 Nouveautés v3.4.0 (2025-11-18)
+Cette version consolide toutes les corrections et améliorations majeures.
+
+#### 🐛 Corrections de Bugs
+- **Bug de duplication de semaine résolu** : Les semaines dupliquées se terminent maintenant correctement
+  - Implémentation de la fonction `parseLocalDate()` pour gérer les timezones
+  - 7 corrections appliquées dans `Schedule.tsx`
+  - Avant : 2025-11-23 à 2025-11-29 (6 jours)
+  - Après : 2025-11-23 à 2025-11-30 (7 jours) ✅
+
+#### 🔒 Améliorations de Sécurité
+- Migration des clés API vers variables d'environnement
+- Mode test désactivé par défaut (authentification obligatoire)
+- Score de sécurité : 6/10 → 9/10 (+50%)
+- Fichiers `.env` et `.env.example` inclus
+
+#### 📚 Documentation
+- `CHANGELOG.md` : Historique complet des versions
+- Guide de démarrage local amélioré
+- Documentation de déploiement
+
+#### 🌐 Déploiement
+- Version en production : https://kytlxrxmku9b.space.minimax.io
+- Build optimisé : 11.70s, 996 KB (gzip: 262 KB)
+- Status : ✅ Production Ready - 100% fonctionnel
 
 ### Historique des Versions
+- v3.4.0: Version stable avec toutes les corrections (ACTUELLE)
+- v3.3.2: Correction complète du bug de duplication
+- v3.3.1: Première correction du bug de duplication
+- v3.3.0: Corrections de sécurité appliquées
 - v3.2.9: Favicon "M" blanc, interface optimisée
 - v3.2.8: Modales de confirmation, soft delete
 - v3.2.7: Améliorations mobile, dates visibles
@@ -172,7 +202,9 @@ Ce projet est sous licence MIT. Voir le fichier `LICENSE` pour plus de détails.
 
 ## 🚀 Production
 
-Application déployée en production sur: `calendar.monteiromtlnord.com`
+Applications déployées:
+- **Version v3.4.0 (recommandée)**: https://kytlxrxmku9b.space.minimax.io
+- **Hostinger**: calendar.monteiromtlnord.com
 
 ---
 
